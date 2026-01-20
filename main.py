@@ -1,18 +1,8 @@
 def main():
     a = input()
-    # try:
-    #     int(a)
-    #     print("int")
-    # except Exception as e:
-    #     print("str")
+    # b = int(input())
 
-    if a.isdigit():
-        print(
-            "int"
-        )
-    else:
-        print("str")
-
-
+    print(len(a))
+    
 if __name__ == "__main__":
     main()
