@@ -1,57 +1,44 @@
 # Boolean Operators in Python
-# Python has three boolean operators: and, or, not
+# Python has three logical operators: and, or, not
 
-# ===== AND Operator =====
+# Example 1: 'and' operator
 # Returns True if both statements are true
-print("=== AND Operator ===")
 x = 5
-print(x > 3 and x < 10)   # True - both conditions are true
-print(x > 3 and x < 4)    # False - second condition is false
+print(x > 3 and x < 10)  # Output: True (both conditions are true)
+print(x > 3 and x > 10)  # Output: False (second condition is false)
 
-# Example with variables
-a = True
-b = True
-c = False
-print(a and b)    # True
-print(a and c)    # False
-print(c and c)    # False
-
-# ===== OR Operator =====
+# Example 2: 'or' operator
 # Returns True if at least one statement is true
-print("\n=== OR Operator ===")
-print(x > 3 or x < 4)     # True - first condition is true
-print(x < 3 or x > 10)    # False - both conditions are false
+print(x > 3 or x < 4)   # Output: True (first condition is true)
+print(x < 3 or x > 10)  # Output: False (both conditions are false)
 
-# Example with variables
-print(a or c)     # True - at least one is true
-print(c or c)     # False - both are false
-
-# ===== NOT Operator =====
+# Example 3: 'not' operator
 # Reverses the result, returns False if the result is true
-print("\n=== NOT Operator ===")
-print(not True)           # False
-print(not False)          # True
-print(not(x > 3 and x < 10))  # False - negates True
+print(not(x > 3 and x < 10))  # Output: False (negates True)
+print(not(x > 10))            # Output: True (negates False)
 
-# Example: Check if value is NOT in a range
-y = 15
-print(not(5 < y < 10))    # True - y is NOT in range 5-10
+# Example 4: Combining operators
+a = True
+b = False
+c = True
 
-# ===== Combining Operators =====
-print("\n=== Combined Operators ===")
-# Using multiple operators together
+print(a and b)          # Output: False
+print(a or b)           # Output: True
+print(not a)            # Output: False
+print(a and b or c)     # Output: True (and has higher precedence than or)
+print(a and (b or c))   # Output: True
+
+# Example 5: Practical example with boolean operators
 age = 25
 has_license = True
-has_car = False
+is_sober = True
 
 # Check if person can drive
-can_drive = age >= 18 and has_license
-print(f"Can drive: {can_drive}")  # True
+can_drive = age >= 18 and has_license and is_sober
+print(f"Can drive: {can_drive}")  # Output: Can drive: True
 
-# Check if person can go on road trip
-can_roadtrip = can_drive and has_car
-print(f"Can go on road trip: {can_roadtrip}")  # False
-
-# Check if person needs transportation
-needs_transport = not has_car or age < 18
-print(f"Needs transportation: {needs_transport}")  # True
+# Check if person is eligible for discount (either senior or student)
+is_senior = False
+is_student = True
+gets_discount = is_senior or is_student
+print(f"Gets discount: {gets_discount}")  # Output: Gets discount: True
