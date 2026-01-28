@@ -1,37 +1,35 @@
-# Boolean Comparison Results in Python
-# When you compare two values, the expression is evaluated and returns a Boolean
+# Boolean as Comparison Results
+# Comparisons return boolean values
 
-# Example 1: Comparison operators
-print(10 > 9)    # True - greater than
-print(10 < 9)    # False - less than
-print(10 == 9)   # False - equal to
-print(10 != 9)   # True - not equal to
-print(10 >= 9)   # True - greater than or equal to
-print(10 <= 9)   # False - less than or equal to
+# Example 1: Comparing numbers
+a = 10
+b = 20
 
-# Example 2: Comparing variables
+print(a > b)   # Output: False (10 is not greater than 20)
+print(a < b)   # Output: True (10 is less than 20)
+print(a == b)  # Output: False (10 is not equal to 20)
+print(a != b)  # Output: True (10 is not equal to 20)
+
+# Example 2: Comparing strings
+x = "apple"
+y = "banana"
+
+print(x == y)  # Output: False
+print(x != y)  # Output: True
+print(x < y)   # Output: True (alphabetically, 'apple' comes before 'banana')
+
+# Example 3: Using comparison in conditions
+age = 18
+print(age >= 18)  # Output: True (age is greater than or equal to 18)
+
+# Example 4: Comparing with variables
+num1 = 100
+num2 = 100
+
+print(num1 == num2)  # Output: True
+print(num1 is num2)  # Output: True (same object in memory for small integers)
+
+# Example 5: Chained comparisons
 x = 5
-y = 3
-print(x > y)     # True - 5 is greater than 3
-
-# Example 3: Using comparison in conditional statements
-a = 200
-b = 33
-
-if a > b:
-    print("a is greater than b")
-
-# Example 4: Comparing strings (alphabetically)
-print("apple" < "banana")   # True - 'a' comes before 'b'
-print("apple" == "apple")   # True - strings are identical
-print("Apple" == "apple")   # False - case sensitive comparison
-
-# Example 5: Comparing different types
-print(10 == 10.0)  # True - int and float can be compared
-print(10 == "10")  # False - int and string are different types
-
-# Example 6: Chained comparisons
-x = 10
-print(5 < x < 15)   # True - x is between 5 and 15
-print(1 < 2 < 3)    # True - all comparisons are true
-print(1 < 2 > 3)    # False - 2 > 3 is false
+print(1 < x < 10)  # Output: True (x is between 1 and 10)
+print(1 < x and x < 10)  # Same as above, explicit version
