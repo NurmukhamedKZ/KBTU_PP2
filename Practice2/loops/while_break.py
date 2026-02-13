@@ -1,7 +1,3 @@
-# While Loop with Break in Python
-# 'break' stops the loop even if condition is still true
-
-# Example 1: Basic break
 i = 1
 while i < 6:
     print(i)
@@ -9,7 +5,6 @@ while i < 6:
         break
     i += 1
 
-# Example 2: Search and break
 print("\nSearching for number 7:")
 num = 0
 while num < 20:
@@ -18,7 +13,6 @@ while num < 20:
         print(f"Found {num}!")
         break
 
-# Example 3: Break on condition
 print("\nBreak when sum > 10:")
 total = 0
 i = 1
@@ -29,7 +23,6 @@ while True:
         break
     i += 1
 
-# Example 4: Break in infinite loop
 print("\nControlled infinite loop:")
 counter = 0
 while True:
@@ -38,7 +31,6 @@ while True:
     if counter >= 5:
         break
 
-# Example 5: Break with user simulation
 print("\nSimulated password check:")
 attempts = 0
 password = "secret"

@@ -1,7 +1,4 @@
-# If Elif Else Statement in Python
-# 'elif' is short for "else if"
 
-# Example 1: Basic elif
 a = 33
 b = 33
 if b > a:
@@ -9,7 +6,6 @@ if b > a:
 elif a == b:
     print("a and b are equal")
 
-# Example 2: Grade checker
 score = 85
 if score >= 90:
     print("Grade: A")
@@ -22,7 +18,6 @@ elif score >= 60:
 else:
     print("Grade: F")
 
-# Example 3: Time of day greeting
 hour = 14
 if hour < 12:
     print("Good morning!")
@@ -31,7 +26,6 @@ elif hour < 18:
 else:
     print("Good evening!")
 
-# Example 4: Number sign check
 num = -5
 if num > 0:
     print("Positive")
@@ -40,7 +34,6 @@ elif num < 0:
 else:
     print("Zero")
 
-# Example 5: Age category
 age = 25
 if age < 13:
     print("Child")
