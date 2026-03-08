@@ -6,7 +6,7 @@ import re
 
 def match_a_anything_b(text: str) -> list:
     """Match 'a' followed by anything, ending in 'b'."""
-    pattern = r"a.*b"
+    pattern = r"a.*?b"
     return re.findall(pattern, text)
 
 
