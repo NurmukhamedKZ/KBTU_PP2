@@ -1,8 +1,6 @@
 from argon2 import PasswordHasher
+import csv
 
-from connect import get_connection
-
-from argon2 import PasswordHasher
 from connect import get_connection
 
 user_id = None
@@ -217,6 +215,60 @@ def delete_phone(user_id: int, contact_id: int):
         conn.close()
 
 
+def import_from_csv(user_id: int, filepath: str):
+    """Import contacts from a CSV file into the phonebook."""
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    added = 0
+    skipped = 0
+    
+    try:
+        with open(filepath, encoding='utf-8') as f:
+            reader = csv.DictReader(f)  # expects columns: name, phone
+            
+            for row in reader:
+                name = row.get('name', '').strip()
+                phone = row.get('phone', '').strip()
+
+                print(name)
+                print(phone)
+                
+                if not name or not phone:
+                    print(f"⚠️  Skipping incomplete row: {row}")
+                    skipped += 1
+                    continue
+                
+                try:
+                    cur.execute("""
+                        INSERT INTO phonebook (user_id, name, phone)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, phone) DO NOTHING
+                    """, (user_id, name, phone))
+                    
+                    if cur.rowcount == 1:
+                        added += 1
+                    else:
+                        print(f"⚠️  Duplicate skipped: {name} — {phone}")
+                        skipped += 1
+                        
+                except Exception as e:
+                    print(f"❌ Error on row {row}: {e}")
+                    skipped += 1
+        
+        conn.commit()
+        print(f"✅ Import done: {added} added, {skipped} skipped")
+        
+    except FileNotFoundError:
+        print(f"❌ File not found: {filepath}")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Import failed: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
 if __name__ == "__main__":
     print("Hello!")
     while True:
@@ -252,7 +304,7 @@ if __name__ == "__main__":
             "4: delete phone\n"
             "5: exit\n"
             "-----------------------------------\n"
-            "User: "
+            "Choise: "
         )
         try:
             user_choice = int(user_input)
@@ -261,15 +313,23 @@ if __name__ == "__main__":
             continue
 
         if user_choice == 1:
-            name = input("Name: ")
-            phone = input("Phone: ")
-            add_new_phone(user_id, name, phone)
+            sub = input("1: manual entry\n2: import from CSV\nChoice: ")
+    
+            if sub == '1':
+                name = input("Name: ")
+                phone = input("Phone: ")
+                add_new_phone(user_id, name, phone)
+            
+            elif sub == '2':
+                filepath = input("CSV file path (e.g. contacts.csv): ")
+                import_from_csv(user_id, filepath)
 
         elif user_choice == 2:
             update_choise = input(
                 "1: update phone by name\n"
                 "2: update name by phone\n"
-                "3: update both by contact id\n")
+                "3: update both by contact id\n"
+                "Choise: ")
             try:
                 user_choice = int(update_choise)
             except:
