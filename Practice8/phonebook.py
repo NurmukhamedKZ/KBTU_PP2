@@ -5,60 +5,45 @@ from connect import get_connection
 
 user_id = None
 
-# USER Functions
-def hash_password(password: str) -> str:
-    ph = PasswordHasher()
-    return ph.hash(password)
+# ── AUTH ──────────────────────────────────────────────────────────────────────
 
-def check_password(password_from_db: str,password: str) -> bool:
-    ph = PasswordHasher()
-    return ph.verify(password_from_db, password)
+def hash_password(password: str) -> str:
+    return PasswordHasher().hash(password)
 
 def register(email: str, password: str) -> bool:
-    """Add a new user to the DB"""
     hashed = hash_password(password)
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            INSERT INTO users (email, password)
-            VALUES (%s, %s)
-        """, (email, hashed))
+        cur.execute(
+            "INSERT INTO users (email, password) VALUES (%s, %s)",
+            (email, hashed)
+        )
         conn.commit()
-        print(f"✅ Added new user: {email}\nPassword hash: {hashed}")
+        print(f"✅ Registered: {email}")
         return True
-
     except Exception as e:
         conn.rollback()
         print(f"❌ Error: {e}")
         return False
-
     finally:
         cur.close()
         conn.close()
 
-def login(email: str, password: str) -> int:
+def login(email: str, password: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT id, password FROM users
-            WHERE email = %s
-        """, (email,))  # comma makes it a tuple, required by psycopg2
-        
-        row = cur.fetchone()  # returns one row or None
-        
+        cur.execute(
+            "SELECT id, password FROM users WHERE email = %s",
+            (email,)
+        )
+        row = cur.fetchone()
         if row is None:
             print("❌ Email not found")
             return None
-        
-        user_id = row[0]
-        hashed = row[1]
-        
-        ph = PasswordHasher()
-        ph.verify(hashed, password)  # raises exception if wrong
-        return user_id
-        
+        PasswordHasher().verify(row[1], password)
+        return row[0]
     except Exception as e:
         print(e)
         return None
@@ -66,50 +51,74 @@ def login(email: str, password: str) -> int:
         cur.close()
         conn.close()
 
-# PHONEBOOK Functions
-def add_new_phone(user_id: int, name: str, phone: str):
+# ── PHONEBOOK — calls DB functions / procedures ───────────────────────────────
+
+def upsert_contact(user_id: int, name: str, phone: str):
+    """Insert or update a contact via the upsert_contact procedure."""
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            INSERT INTO phonebook (user_id, name, phone)
-            VALUES (%s, %s, %s)""",
-            (user_id, name, phone))
+        cur.execute("CALL upsert_contact(%s, %s, %s)", (user_id, name, phone))
         conn.commit()
-        print(f"✅ Added contact: {name} — {phone}")
-
+        print(f"✅ Saved contact: {name} — {phone}")
     except Exception as e:
         conn.rollback()
-        print(f"ERROR: {e}")
-
+        print(f"❌ Error: {e}")
     finally:
         cur.close()
         conn.close()
 
-def get_all_phones(user_id: int) -> list:
+
+def bulk_insert_contacts(user_id: int, names: list, phones: list):
+    """
+    Insert many contacts via the bulk_insert_contacts procedure.
+    Prints which entries had invalid phone numbers.
+    """
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT id, name, phone FROM phonebook
-            WHERE user_id = %s""",
-            (user_id,))
+        cur.execute(
+            "CALL bulk_insert_contacts(%s, %s, %s, %s)",
+            (user_id, names, phones, [])
+        )
+        # The procedure returns its INOUT parameter as the only result column
+        result = cur.fetchone()
+        conn.commit()
 
+        invalid = result[0] if result else []
+        if invalid:
+            print(f"⚠️  Invalid entries ({len(invalid)}):")
+            for entry in invalid:
+                print(f"   • {entry}")
+        else:
+            print("✅ All entries inserted successfully")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+def search_contacts(user_id: int, pattern: str):
+    """Search contacts by partial name or phone using the DB function."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT * FROM search_contacts(%s, %s)",
+            (user_id, pattern)
+        )
         rows = cur.fetchall()
-        # rows = [("Aisha", "Bekova", "+77009876543"), ("Damir", None, "+77771112233")]
-
         if not rows:
-            print("📭 No contacts found")
+            print("📭 No matches found")
             return []
-
-        print(f"\n📒 Phonebook for user {user_id}:")
-        print(f"{"ID":<3} {'Name':<20} {'Phone':<15}")
-        print("-" * 35)
-        for id, name, phone in rows:
-            print(f"{id:<3} {name:<20} {phone:<15}")
-
+        print(f"\n🔍 Results for '{pattern}':")
+        print(f"{'ID':<5} {'Name':<20} {'Phone':<15}")
+        print("-" * 40)
+        for row_id, name, phone in rows:
+            print(f"{row_id:<5} {name:<20} {phone:<15}")
         return rows
-    
     except Exception as e:
         print(f"❌ Error: {e}")
         return []
@@ -117,23 +126,49 @@ def get_all_phones(user_id: int) -> list:
         cur.close()
         conn.close()
 
-def update_phone_by_name(user_id: int, name: str, new_phone: str):
-    """Find contact by name, update their phone number"""
+
+def get_contacts_paginated(user_id: int, page: int = 1, page_size: int = 5):
+    """Retrieve contacts page by page using the DB function."""
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            UPDATE phonebook
-            SET phone = %s
-            WHERE user_id = %s AND name = %s
-        """, (new_phone, user_id, name))
+        cur.execute(
+            "SELECT * FROM get_contacts_paginated(%s, %s, %s)",
+            (user_id, page, page_size)
+        )
+        rows = cur.fetchall()
+        if not rows:
+            print("📭 No contacts on this page")
+            return []
+        print(f"\n📒 Page {page} (size {page_size}):")
+        print(f"{'ID':<5} {'Name':<20} {'Phone':<15}")
+        print("-" * 40)
+        for row_id, name, phone in rows:
+            print(f"{row_id:<5} {name:<20} {phone:<15}")
+        return rows
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return []
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_contact(user_id: int, by_name: str = None, by_phone: str = None):
+    """Delete a contact by name or phone via the delete_contact procedure."""
+    if not by_name and not by_phone:
+        print("❌ Provide a name or phone to delete")
+        return
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "CALL delete_contact(%s, %s, %s)",
+            (user_id, by_name, by_phone)
+        )
         conn.commit()
-
-        if cur.rowcount == 0:  # no rows were updated
-            print(f"❌ Contact '{name}' not found")
-        else:
-            print(f"✅ Updated phone for {name} → {new_phone}")
-
+        label = by_name or by_phone
+        print(f"✅ Deleted contact: {label}")
     except Exception as e:
         conn.rollback()
         print(f"❌ Error: {e}")
@@ -141,249 +176,115 @@ def update_phone_by_name(user_id: int, name: str, new_phone: str):
         cur.close()
         conn.close()
 
-
-def update_name_by_phone(user_id: int, phone: str, new_name: str):
-    """Find contact by phone, update their name"""
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            UPDATE phonebook
-            SET name = %s
-            WHERE user_id = %s AND phone = %s
-        """, (new_name, user_id, phone))
-        conn.commit()
-
-        if cur.rowcount == 0:
-            print(f"❌ Phone '{phone}' not found")
-        else:
-            print(f"✅ Updated name for {phone} → {new_name}")
-
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error: {e}")
-    finally:
-        cur.close()
-        conn.close()
-
-
-def update_phone_name_by_id(user_id: int, contact_id: int, new_name: str, new_phone: str):
-    """Find contact by its own id, update both name and phone"""
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            UPDATE phonebook
-            SET name = %s, phone = %s
-            WHERE user_id = %s AND id = %s
-        """, (new_name, new_phone, user_id, contact_id))
-        conn.commit()
-
-        if cur.rowcount == 0:
-            print(f"❌ Contact with id '{contact_id}' not found")
-        else:
-            print(f"✅ Updated contact {contact_id} → {new_name}, {new_phone}")
-
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error: {e}")
-    finally:
-        cur.close()
-        conn.close()
-
-def delete_phone(user_id: int, contact_id: int):
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            DELETE FROM phonebook
-            WHERE user_id = %s AND id = %s
-        """, (user_id, contact_id))
-        
-        conn.commit()
-       
-        if cur.rowcount == 0:
-            print(f"❌ Contact with id '{contact_id}' not found")
-        else:
-            print(f"✅ Contact {contact_id} deleted")
-
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error: {e}")
-    finally:
-        cur.close()
-        conn.close()
-
-def delete_phone_by_phone(user_id: int, phone: str):
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            DELETE FROM phonebook
-            WHERE user_id = %s AND phone = %s
-        """, (user_id, phone))
-        
-        conn.commit()
-       
-        if cur.rowcount == 0:
-            print(f"❌ Contact with phone '{phone}' not found")
-        else:
-            print(f"✅ Contact {phone} deleted")
-
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error: {e}")
-    finally:
-        cur.close()
-        conn.close()
 
 def import_from_csv(user_id: int, filepath: str):
-    """Import contacts from a CSV file into the phonebook."""
-    conn = get_connection()
-    cur = conn.cursor()
-    
-    added = 0
-    skipped = 0
-    
+    """Read a CSV file and bulk-insert via the DB procedure."""
+    names, phones = [], []
     try:
         with open(filepath, encoding='utf-8') as f:
-            reader = csv.DictReader(f)  # expects columns: name, phone
-            
-            for row in reader:
-                name = row.get('name', '').strip()
+            for row in csv.DictReader(f):
+                name  = row.get('name',  '').strip()
                 phone = row.get('phone', '').strip()
-
-                print(name)
-                print(phone)
-                
-                if not name or not phone:
+                if name and phone:
+                    names.append(name)
+                    phones.append(phone)
+                else:
                     print(f"⚠️  Skipping incomplete row: {row}")
-                    skipped += 1
-                    continue
-                
-                try:
-                    cur.execute("""
-                        INSERT INTO phonebook (user_id, name, phone)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (user_id, phone) DO NOTHING
-                    """, (user_id, name, phone))
-                    
-                    if cur.rowcount == 1:
-                        added += 1
-                    else:
-                        print(f"⚠️  Duplicate skipped: {name} — {phone}")
-                        skipped += 1
-                        
-                except Exception as e:
-                    print(f"❌ Error on row {row}: {e}")
-                    skipped += 1
-        
-        conn.commit()
-        print(f"✅ Import done: {added} added, {skipped} skipped")
-        
     except FileNotFoundError:
         print(f"❌ File not found: {filepath}")
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Import failed: {e}")
-    finally:
-        cur.close()
-        conn.close()
+        return
 
+    if names:
+        bulk_insert_contacts(user_id, names, phones)
+
+# ── MENU ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Hello!")
+    # Login / register
     while True:
         r_l = input("Register or Login (r/l): ").lower()
         if r_l == "r":
-            email = input("Email: ")
+            email    = input("Email: ")
             password = input("Password: ")
-            status = register(email, password)
-            if status:
-                print("Registered succesfully, now Login to the accound")
-            else:
-                print("❌ Try again")
+            if register(email, password):
+                print("Registered. Now login.")
         elif r_l == "l":
-            email = input("Email: ")
+            email    = input("Email: ")
             password = input("Password: ")
-            user_id = login(email, password)
+            user_id  = login(email, password)
             if user_id is None:
-                print("❌ Incorrect, Try again")
+                print("❌ Incorrect, try again")
             else:
                 print(f"✅ Welcome, {email}")
                 break
         else:
-            print("Only r or l")
-        
-    print(f"USER_ID: {user_id}")
-    
+            print("Enter r or l")
+
+    # Main menu
     while True:
-        user_input = input(
-            "\n-----------------------------------\n"
-            "1: add phone\n"
-            "2: update phone\n"
-            "3: get all phones\n"
-            "4: delete phone\n"
-            "5: exit\n"
-            "-----------------------------------\n"
-            "Choise: "
+        choice = input(
+            "\n───────────────────────────────────\n"
+            "1: Add / update contact (upsert)\n"
+            "2: Bulk insert from list\n"
+            "3: Import from CSV\n"
+            "4: Search contacts\n"
+            "5: View contacts (paginated)\n"
+            "6: Delete contact\n"
+            "7: Exit\n"
+            "───────────────────────────────────\n"
+            "Choice: "
         )
-        try:
-            user_choice = int(user_input)
-        except:
-            print("Enter a number")
-            continue
 
-        if user_choice == 1:
-            sub = input("1: manual entry\n2: import from CSV\nChoice: ")
-    
-            if sub == '1':
-                name = input("Name: ")
-                phone = input("Phone: ")
-                add_new_phone(user_id, name, phone)
-            
-            elif sub == '2':
-                filepath = input("CSV file path (e.g. contacts.csv): ")
-                import_from_csv(user_id, filepath)
+        if choice == "1":
+            name  = input("Name: ")
+            phone = input("Phone: ")
+            upsert_contact(user_id, name, phone)
 
-        elif user_choice == 2:
-            update_choise = input(
-                "1: update phone by name\n"
-                "2: update name by phone\n"
-                "3: update both by contact id\n"
-                "Choise: ")
+        elif choice == "2":
+            print("Enter contacts one per line as  name,phone  (blank line to finish):")
+            names, phones = [], []
+            while True:
+                line = input("  > ").strip()
+                if not line:
+                    break
+                parts = line.split(",", 1)
+                if len(parts) == 2:
+                    names.append(parts[0].strip())
+                    phones.append(parts[1].strip())
+                else:
+                    print("  ⚠️  Format: name,phone")
+            if names:
+                bulk_insert_contacts(user_id, names, phones)
+
+        elif choice == "3":
+            filepath = input("CSV file path: ")
+            import_from_csv(user_id, filepath)
+
+        elif choice == "4":
+            pattern = input("Search (name or phone): ")
+            search_contacts(user_id, pattern)
+
+        elif choice == "5":
             try:
-                user_choice = int(update_choise)
-            except:
-                print("Enter a number")
-                continue
-            
-            if user_choice == 1:
-                name = input("Name to find: ")
-                new_phone = input("New phone: ")
-                update_phone_by_name(user_id, name, new_phone)
-            elif user_choice == 2:
-                phone = input("Phone to find: ")
-                new_name = input("New name: ")
-                update_name_by_phone(user_id, phone, new_name)
-            elif user_choice == 3:
-                contact_id = int(input("Contact ID: "))
-                new_name = input("New name: ")
-                new_phone = input("New phone: ")
-                update_phone_name_by_id(user_id, contact_id, new_name, new_phone)
+                page      = int(input("Page number (default 1): ") or 1)
+                page_size = int(input("Page size  (default 5): ") or 5)
+            except ValueError:
+                page, page_size = 1, 5
+            get_contacts_paginated(user_id, page, page_size)
+
+        elif choice == "6":
+            sub = input("Delete by (n)ame or (p)hone? ").lower()
+            if sub == "n":
+                name = input("Name: ")
+                delete_contact(user_id, by_name=name)
+            elif sub == "p":
+                phone = input("Phone: ")
+                delete_contact(user_id, by_phone=phone)
             else:
-                print("Input a number [1, 2, 3]!")
+                print("Enter n or p")
 
-        elif user_choice == 3:
-            get_all_phones(user_id)
-
-        elif user_choice == 4:
-            phone = input("Phone:")
-            delete_phone_by_phone(user_id, phone)
-
-        elif user_choice == 5:
-            print("Bye")
+        elif choice == "7":
+            print("Bye!")
             break
-        
-        
-            
+        else:
+            print("Enter a number 1-7")
