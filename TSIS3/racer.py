@@ -308,3 +308,105 @@ class ObstacleManager:
     def draw(self, surface: pygame.Surface):
         for o in self.obstacles:
             o.draw(surface)
+
+
+class PowerUp:
+    _COLORS = {"nitro": YELLOW, "shield": BLUE, "repair": GREEN}
+    _LABELS = {"nitro": "N", "shield": "S", "repair": "R"}
+
+    def __init__(self, lane: int, kind: str):
+        self.lane = lane
+        self.kind = kind
+        self.x = LANE_CENTERS[lane]
+        self.y = -20
+        self.size = 28
+        self.active = True
+        self.spawn_time = pygame.time.get_ticks()
+
+    @property
+    def rect(self) -> pygame.Rect:
+        return pygame.Rect(self.x - self.size // 2, self.y - self.size // 2,
+                           self.size, self.size)
+
+    def update(self, speed: float):
+        self.y += speed
+        if self.y > HEIGHT + 40:
+            self.active = False
+        if pygame.time.get_ticks() - self.spawn_time > 8000:
+            self.active = False
+
+    def draw(self, surface: pygame.Surface):
+        color = self._COLORS[self.kind]
+        pygame.draw.rect(surface, color, self.rect, border_radius=6)
+        pygame.draw.rect(surface, WHITE, self.rect, 2, border_radius=6)
+        font = pygame.font.SysFont("Arial", 16, bold=True)
+        label = font.render(self._LABELS[self.kind], True, BLACK)
+        surface.blit(label, label.get_rect(center=self.rect.center))
+
+
+class PowerUpState:
+    """Tracks the currently active power-up effect."""
+
+    def __init__(self):
+        self.kind: str | None = None
+        self.end_time: int = 0
+        self.bonus_pts: int = 0
+
+    @property
+    def active(self) -> bool:
+        if self.kind == "shield":
+            return True   # shield stays until consumed
+        return self.kind is not None and pygame.time.get_ticks() < self.end_time
+
+    def activate(self, kind: str):
+        now = pygame.time.get_ticks()
+        self.kind = kind
+        if kind == "nitro":
+            self.end_time = now + 4000
+            self.bonus_pts += 50
+        elif kind == "shield":
+            self.end_time = now + 999_999
+            self.bonus_pts += 30
+        elif kind == "repair":
+            self.end_time = now          # instant — caller handles effect
+            self.bonus_pts += 20
+
+    def consume_shield(self):
+        self.kind = None
+
+    def remaining_ms(self) -> int:
+        return max(0, self.end_time - pygame.time.get_ticks())
+
+    def tick(self):
+        if self.kind and self.kind != "shield" and pygame.time.get_ticks() >= self.end_time:
+            self.kind = None
+
+
+class PowerUpManager:
+    def __init__(self):
+        self.items: list[PowerUp] = []
+        self.timer = 0
+        self.interval = 300
+
+    def update(self, speed: float, difficulty: int):
+        self.interval = max(180, 300 - difficulty * 10)
+        self.timer += 1
+        if self.timer >= self.interval:
+            self.timer = 0
+            lane = random.randint(0, NUM_LANES - 1)
+            kind = random.choice(["nitro", "shield", "repair"])
+            self.items.append(PowerUp(lane, kind))
+        for p in self.items:
+            p.update(speed)
+        self.items = [p for p in self.items if p.active]
+
+    def check_collect(self, player_rect: pygame.Rect) -> str | None:
+        for p in self.items:
+            if p.active and p.rect.colliderect(player_rect):
+                p.active = False
+                return p.kind
+        return None
+
+    def draw(self, surface: pygame.Surface):
+        for p in self.items:
+            p.draw(surface)
