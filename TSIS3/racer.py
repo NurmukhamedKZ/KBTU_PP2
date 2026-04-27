@@ -11,6 +11,7 @@ from constants import (
     CAR_COLOR_MAP, TRAFFIC_COLORS,
     COIN_BONUS_MULTIPLIER, DISTANCE_SCORE_RATE,
 )
+from scoring import calculate_score
 
 
 class Road:
@@ -410,3 +411,145 @@ class PowerUpManager:
     def draw(self, surface: pygame.Surface):
         for p in self.items:
             p.draw(surface)
+
+
+class Game:
+    """
+    Owns all gameplay objects.
+    update(events) -> None
+    draw(surface)  -> None
+    is_over        -> bool
+    result()       -> dict
+    """
+
+    def __init__(self, car_color: tuple, difficulty_name: str):
+        speed_mult = DIFFICULTY_SPEED_MULT[difficulty_name]
+        self.road = Road()
+        self.road.speed = BASE_SCROLL_SPEED * speed_mult
+        self.player = Player(car_color)
+        self.coins = CoinManager()
+        self.traffic = TrafficManager()
+        self.obstacles = ObstacleManager()
+        self.powerups = PowerUpManager()
+        self.powerup_state = PowerUpState()
+
+        self.coin_count = 0
+        self.distance = 0.0
+        self.difficulty = 1
+        self.difficulty_name = difficulty_name
+        self.is_over = False
+
+        self._font_hud = pygame.font.SysFont("Arial", 18, bold=True)
+
+    def _current_speed(self) -> float:
+        speed = self.road.speed
+        if self.powerup_state.kind == "nitro" and self.powerup_state.active:
+            speed *= 1.6
+        return speed
+
+    def _scale_difficulty(self):
+        self.difficulty = min(10, 1 + int(self.distance / 1500))
+
+    def update(self, events: list):
+        if self.is_over:
+            return
+
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:  self.player.move_left()
+                if event.key == pygame.K_RIGHT: self.player.move_right()
+
+        speed = self._current_speed()
+        self.distance += speed
+        self._scale_difficulty()
+        self.road.speed = (BASE_SCROLL_SPEED
+                           * DIFFICULTY_SPEED_MULT[self.difficulty_name]
+                           * (1 + self.difficulty * 0.05))
+
+        self.road.update()
+        self.player.update()
+        self.coins.update(speed, self.player.lane)
+        self.traffic.update(speed, self.player.lane, self.difficulty)
+        self.obstacles.update(speed, self.player.lane, self.difficulty)
+        self.powerups.update(speed, self.difficulty)
+        self.powerup_state.tick()
+
+        self.coin_count += self.coins.check_collect(self.player.rect)
+
+        if not self.powerup_state.active:
+            kind = self.powerups.check_collect(self.player.rect)
+            if kind:
+                self.powerup_state.activate(kind)
+                if kind == "nitro":
+                    self.player.nitro = True
+                elif kind == "shield":
+                    self.player.shield = True
+
+        if self.powerup_state.kind == "nitro" and not self.powerup_state.active:
+            self.player.nitro = False
+
+        hit_kind = self.obstacles.check_hit(self.player.rect)
+        if hit_kind:
+            if hit_kind == "barrier":
+                if self.powerup_state.kind == "shield":
+                    self.powerup_state.consume_shield()
+                    self.player.shield = False
+                else:
+                    self.is_over = True
+            elif hit_kind in ("oil", "pothole"):
+                self.road.speed = max(2, self.road.speed * 0.6)
+
+        if self.traffic.check_collision(self.player.rect):
+            if self.powerup_state.kind == "shield":
+                self.powerup_state.consume_shield()
+                self.player.shield = False
+                player_r = self.player.rect
+                self.traffic.cars = [c for c in self.traffic.cars
+                                     if not c.rect.colliderect(player_r)]
+            else:
+                self.is_over = True
+
+    def draw(self, surface: pygame.Surface):
+        self.road.draw(surface)
+        self.coins.draw(surface)
+        self.obstacles.draw(surface)
+        self.powerups.draw(surface)
+        self.traffic.draw(surface)
+        self.player.draw(surface)
+        self._draw_hud(surface)
+
+    def _draw_hud(self, surface: pygame.Surface):
+        score = self.result()["score"]
+        dist_m = int(self.distance / 10)
+        lines = [
+            f"Score:  {score}",
+            f"Dist:   {dist_m} m",
+            f"Coins:  {self.coin_count}",
+            f"Level:  {self.difficulty}",
+        ]
+        for i, line in enumerate(lines):
+            shadow = self._font_hud.render(line, True, BLACK)
+            surf   = self._font_hud.render(line, True, WHITE)
+            surface.blit(shadow, (11, 11 + i * 22))
+            surface.blit(surf,   (10, 10 + i * 22))
+
+        if self.powerup_state.active and self.powerup_state.kind:
+            kind = self.powerup_state.kind
+            rem_s = self.powerup_state.remaining_ms() / 1000
+            pu_text = kind.upper()
+            if kind == "nitro":
+                pu_text += f" {rem_s:.1f}s"
+            elif kind == "shield":
+                pu_text += " (shield)"
+            pu_surf = self._font_hud.render(pu_text, True, YELLOW)
+            surface.blit(pu_surf, (surface.get_width() - pu_surf.get_width() - 10, 10))
+
+    def result(self) -> dict:
+        score = calculate_score(self.coin_count, self.distance,
+                                self.powerup_state.bonus_pts)
+        return {
+            "score":    score,
+            "distance": int(self.distance / 10),
+            "coins":    self.coin_count,
+            "bonus":    self.powerup_state.bonus_pts,
+        }
