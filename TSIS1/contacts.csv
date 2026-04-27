@@ -1,0 +1,8 @@
+name,phone,phone_type,email,birthday,group
+Alice,+77001112233,mobile,alice@gmail.com,1995-03-14,Friend
+Bob,+77002223344,work,bob@work.kz,1988-07-22,Work
+Carol,+77003334455,home,carol@gmail.com,2000-11-05,Family
+David,+77004445566,mobile,david@yahoo.com,,Work
+Eva,+77005556677,mobile,eva@gmail.com,1993-06-30,Friend
+Frank,+77006667788,work,frank@company.kz,,Work
+Grace,+77007778899,home,,1990-01-15,Family
