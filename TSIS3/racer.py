@@ -242,3 +242,69 @@ class TrafficManager:
     def draw(self, surface: pygame.Surface):
         for c in self.cars:
             c.draw(surface)
+
+
+class Obstacle:
+    _COLORS = {"oil": (20, 20, 20), "pothole": (40, 30, 20), "barrier": (240, 60, 60)}
+
+    def __init__(self, lane: int, kind: str):
+        self.lane = lane
+        self.kind = kind
+        self.x = LANE_CENTERS[lane]
+        self.y = -30
+        self.width = 36
+        self.height = 20
+        self.active = True
+
+    @property
+    def rect(self) -> pygame.Rect:
+        return pygame.Rect(self.x - self.width // 2, self.y - self.height // 2,
+                           self.width, self.height)
+
+    def update(self, speed: float):
+        self.y += speed
+        if self.y > HEIGHT + 40:
+            self.active = False
+
+    def draw(self, surface: pygame.Surface):
+        color = self._COLORS[self.kind]
+        if self.kind == "oil":
+            pygame.draw.ellipse(surface, color, self.rect)
+            pygame.draw.ellipse(surface, (60, 60, 80),
+                                self.rect.inflate(-8, -6), 2)
+        elif self.kind == "pothole":
+            pygame.draw.ellipse(surface, color, self.rect)
+        else:  # barrier
+            pygame.draw.rect(surface, color, self.rect, border_radius=4)
+            pygame.draw.rect(surface, WHITE, self.rect.inflate(-4, -4), 2)
+
+
+class ObstacleManager:
+    def __init__(self):
+        self.obstacles: list[Obstacle] = []
+        self.timer = 0
+        self.interval = 150
+
+    def update(self, speed: float, player_lane: int, difficulty: int):
+        self.interval = max(60, 150 - difficulty * 9)
+        self.timer += 1
+        if self.timer >= self.interval:
+            self.timer = 0
+            lane = random.choice([l for l in range(NUM_LANES) if l != player_lane])
+            kind = random.choice(["oil", "pothole", "barrier"])
+            self.obstacles.append(Obstacle(lane, kind))
+        for o in self.obstacles:
+            o.update(speed)
+        self.obstacles = [o for o in self.obstacles if o.active]
+
+    def check_hit(self, player_rect: pygame.Rect) -> str | None:
+        """Returns obstacle kind if hit, else None."""
+        for o in self.obstacles:
+            if o.active and o.rect.colliderect(player_rect):
+                o.active = False
+                return o.kind
+        return None
+
+    def draw(self, surface: pygame.Surface):
+        for o in self.obstacles:
+            o.draw(surface)
