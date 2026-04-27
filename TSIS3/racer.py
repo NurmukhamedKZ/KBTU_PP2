@@ -102,3 +102,71 @@ class Player:
                 fx = r.centerx + (i - 1) * 8
                 pygame.draw.polygon(surface, YELLOW,
                                     [(fx, r.bottom), (fx - 4, r.bottom + 14), (fx + 4, r.bottom + 14)])
+
+
+class Coin:
+    COIN_COLORS = {1: (255, 215, 0), 3: (192, 192, 192), 5: (255, 140, 0)}
+
+    def __init__(self, lane: int, value: int):
+        self.lane = lane
+        self.value = value
+        self.x = LANE_CENTERS[lane]
+        self.y = -20
+        self.radius = 10
+        self.active = True
+
+    @property
+    def rect(self) -> pygame.Rect:
+        return pygame.Rect(self.x - self.radius, self.y - self.radius,
+                           self.radius * 2, self.radius * 2)
+
+    def update(self, speed: float):
+        self.y += speed
+        if self.y > HEIGHT + 30:
+            self.active = False
+
+    def draw(self, surface: pygame.Surface):
+        color = self.COIN_COLORS.get(self.value, (255, 215, 0))
+        pygame.draw.circle(surface, color, (self.x, int(self.y)), self.radius)
+        pygame.draw.circle(surface, WHITE, (self.x, int(self.y)), self.radius, 2)
+        font = pygame.font.SysFont("Arial", 10, bold=True)
+        label = font.render(str(self.value), True, BLACK)
+        surface.blit(label, label.get_rect(center=(self.x, int(self.y))))
+
+
+class CoinManager:
+    """Spawns and manages coins on the road."""
+
+    WEIGHTS = list(zip([1, 3, 5], [50, 30, 20]))  # (value, weight) pairs
+
+    def __init__(self):
+        self.coins: list[Coin] = []
+        self.timer = 0
+        self.interval = 90   # frames
+
+    def _pick_value(self) -> int:
+        values, weights = zip(*self.WEIGHTS)
+        return random.choices(values, weights=weights, k=1)[0]
+
+    def update(self, speed: float, player_lane: int):
+        self.timer += 1
+        if self.timer >= self.interval:
+            self.timer = 0
+            lane = random.choice([l for l in range(NUM_LANES)])
+            self.coins.append(Coin(lane, self._pick_value()))
+        for c in self.coins:
+            c.update(speed)
+        self.coins = [c for c in self.coins if c.active]
+
+    def check_collect(self, player_rect: pygame.Rect) -> int:
+        """Returns total value of collected coins this frame."""
+        total = 0
+        for c in self.coins:
+            if c.active and c.rect.colliderect(player_rect):
+                total += c.value
+                c.active = False
+        return total
+
+    def draw(self, surface: pygame.Surface):
+        for c in self.coins:
+            c.draw(surface)
