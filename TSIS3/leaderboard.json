@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "score": 448,
+    "distance": 684,
+    "coins": 30,
+    "bonus": 80,
+    "name": "nureke"
+  },
+  {
+    "score": 127,
+    "distance": 175,
+    "coins": 11,
+    "bonus": 0,
+    "name": "nureke"
+  }
+]
