@@ -170,3 +170,75 @@ class CoinManager:
     def draw(self, surface: pygame.Surface):
         for c in self.coins:
             c.draw(surface)
+
+
+class TrafficCar:
+    def __init__(self, lane: int, color: tuple):
+        self.lane = lane
+        self.x = LANE_CENTERS[lane]
+        self.y = -40
+        self.width = PLAYER_WIDTH - 2
+        self.height = PLAYER_HEIGHT - 4
+        self.color = color
+        self.active = True
+
+    @property
+    def rect(self) -> pygame.Rect:
+        return pygame.Rect(
+            self.x - self.width // 2,
+            self.y - self.height // 2,
+            self.width, self.height,
+        )
+
+    def update(self, speed: float):
+        self.y += speed * 0.8   # traffic slightly slower than road
+        if self.y > HEIGHT + 60:
+            self.active = False
+
+    def draw(self, surface: pygame.Surface):
+        r = self.rect
+        pygame.draw.rect(surface, self.color, r, border_radius=6)
+        ww, wh = r.width - 8, 12
+        pygame.draw.rect(surface, (180, 220, 255),
+                         (r.x + 4, r.bottom - 20, ww, wh), border_radius=3)
+        for wx, wy in [(r.x - 4, r.y + 6), (r.right, r.y + 6),
+                       (r.x - 4, r.bottom - 18), (r.right, r.bottom - 18)]:
+            pygame.draw.rect(surface, BLACK, (wx, wy, 8, 12), border_radius=2)
+
+
+class TrafficManager:
+    def __init__(self):
+        self.cars: list[TrafficCar] = []
+        self.timer = 0
+        self.interval = 120
+
+    def _safe_lane(self, player_lane: int) -> int:
+        lanes = list(range(NUM_LANES))
+        random.shuffle(lanes)
+        for lane in lanes:
+            if lane != player_lane:
+                if not any(abs(c.y) < 80 and c.lane == lane for c in self.cars):
+                    return lane
+        return random.randint(0, NUM_LANES - 1)
+
+    def update(self, speed: float, player_lane: int, difficulty: int):
+        self.interval = max(40, 120 - difficulty * 8)
+        self.timer += 1
+        if self.timer >= self.interval:
+            self.timer = 0
+            lane = self._safe_lane(player_lane)
+            color = random.choice(TRAFFIC_COLORS)
+            self.cars.append(TrafficCar(lane, color))
+            if difficulty >= 5 and random.random() < 0.3:
+                lane2 = self._safe_lane(player_lane)
+                self.cars.append(TrafficCar(lane2, random.choice(TRAFFIC_COLORS)))
+        for c in self.cars:
+            c.update(speed)
+        self.cars = [c for c in self.cars if c.active]
+
+    def check_collision(self, player_rect: pygame.Rect) -> bool:
+        return any(c.rect.colliderect(player_rect) for c in self.cars)
+
+    def draw(self, surface: pygame.Surface):
+        for c in self.cars:
+            c.draw(surface)
